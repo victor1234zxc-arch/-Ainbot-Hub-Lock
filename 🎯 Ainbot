@@ -1,0 +1,198 @@
+-- Carregando a Interface Rayfield (Bonita e Profissional)
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Delta Premium | Aimbot & ESP Professional",
+   LoadingTitle = "Iniciando Sistema...",
+   LoadingSubtitle = "by AI Script Master",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "DeltaAimbot", 
+      FileName = "Config"
+   }
+})
+
+-- Variáveis Globais
+local Shooting = false
+local CurrentCamera = workspace.CurrentCamera
+local LocalPlayer = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- Configurações Padrão
+_G.AimbotEnabled = false
+_G.AimPart = "Head"
+_G.AimlockSpeed = 0.15 -- Suavidade (mais baixo é mais rápido)
+_G.WallCheck = false -- Se falso, mira através da parede
+_G.TeamCheck = false
+_G.FOVVisible = true
+_G.FOVRadius = 150
+_G.ESPEnabled = false
+
+-- FOV Circle
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1
+FOVCircle.Filled = false
+FOVCircle.Transparency = 0.7
+FOVCircle.Color = Color3.fromRGB(255, 0, 0)
+
+-- Função para pegar o jogador mais próximo
+local function GetClosestPlayer()
+    local MaximumDistance = _G.FOVRadius
+    local Target = nil
+
+    for _, v in pairs(game.Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+            
+            -- Team Check
+            if _G.TeamCheck and v.Team == LocalPlayer.Team then continue end
+
+            local ScreenPoint = CurrentCamera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+            local VectorDistance = (Vector2.new(game:GetService("UserInputService"):GetMouseLocation().X, game:GetService("UserInputService"):GetMouseLocation().Y) - Vector2.new(ScreenPoint.X, ScreenPoint.Y)).Magnitude
+            
+            if VectorDistance < MaximumDistance then
+                -- Wall Check (Se ativado, checa se há algo entre você e o alvo)
+                if _G.WallCheck then
+                    local RayCastParams = RaycastParams.new()
+                    RayCastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                    RayCastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+                    local RaycastResult = workspace:Raycast(CurrentCamera.CFrame.Position, (v.Character[_G.AimPart].Position - CurrentCamera.CFrame.Position).Unit * 500, RayCastParams)
+                    
+                    if RaycastResult and RaycastResult.Instance:IsDescendantOf(v.Character) then
+                        MaximumDistance = VectorDistance
+                        Target = v
+                    end
+                else
+                    MaximumDistance = VectorDistance
+                    Target = v
+                end
+            end
+        end
+    end
+    return Target
+end
+
+-- Tabs da UI
+local MainTab = Window:CreateTab("Aimbot & Aimlock", 4483362458) -- Ícone de mira
+local VisualsTab = Window:CreateTab("Visuals (ESP)", 4483345998) -- Ícone de olho
+
+-- Seção Aimbot
+MainTab:CreateSection("Configurações de Combate")
+
+MainTab:CreateToggle({
+   Name = "Ativar Aimbot/Aimlock",
+   CurrentValue = false,
+   Callback = function(Value)
+      _G.AimbotEnabled = Value
+   end,
+})
+
+MainTab:CreateDropdown({
+   Name = "Focar em:",
+   Options = {"Head", "UpperTorso", "HumanoidRootPart"},
+   CurrentOption = {"Head"},
+   MultipleOptions = false,
+   Callback = function(Option)
+      _G.AimPart = Option[1]
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "Raio do FOV (Círculo)",
+   Range = {50, 800},
+   Increment = 10,
+   Suffix = "px",
+   CurrentValue = 150,
+   Callback = function(Value)
+      _G.FOVRadius = Value
+      FOVCircle.Radius = Value
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "Ignorar Paredes (WallCheck Off)",
+   CurrentValue = false,
+   Flag = "WallCheck",
+   Callback = function(Value)
+      _G.WallCheck = not Value -- Invertido para facilitar ao usuário
+   end,
+})
+
+-- Seção ESP
+VisualsTab:CreateSection("Visualização")
+
+VisualsTab:CreateToggle({
+   Name = "ESP Linhas (Tracer)",
+   CurrentValue = false,
+   Callback = function(Value)
+      _G.ESPEnabled = Value
+   end,
+})
+
+VisualsTab:CreateToggle({
+   Name = "Mostrar Círculo FOV",
+   CurrentValue = true,
+   Callback = function(Value)
+      FOVCircle.Visible = Value
+   end,
+})
+
+-- Loop Principal (RenderStepped para suavidade máxima)
+RunService.RenderStepped:Connect(function()
+    -- Atualizar FOV Circle
+    FOVCircle.Position = game:GetService("UserInputService"):GetMouseLocation()
+    
+    -- Lógica do Aimlock
+    if _G.AimbotEnabled then
+        local Target = GetClosestPlayer()
+        if Target and Target.Character and Target.Character:FindFirstChild(_G.AimPart) then
+            local TargetPos = Target.Character[_G.AimPart].Position
+            local MousePos = CurrentCamera:WorldToScreenPoint(TargetPos)
+            
+            -- Move a câmera suavemente até o alvo
+            if MousePos.Z > 0 then
+                local AimData = CFrame.new(CurrentCamera.CFrame.Position, TargetPos)
+                CurrentCamera.CFrame = CurrentCamera.CFrame:Lerp(AimData, _G.AimlockSpeed)
+            end
+        end
+    end
+end)
+
+-- Sistema de ESP Simples (Red Lines)
+local function CreateESP()
+    for _, v in pairs(game.Players:GetPlayers()) do
+        if v ~= LocalPlayer then
+            local Line = Drawing.new("Line")
+            Line.Visible = false
+            Line.Color = Color3.fromRGB(255, 0, 0) -- Vermelho como pedido
+            Line.Thickness = 1
+            Line.Transparency = 1
+
+            RunService.RenderStepped:Connect(function()
+                if _G.ESPEnabled and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+                    local Vector, OnScreen = CurrentCamera:WorldToViewportPoint(v.Character.HumanoidRootPart.Position)
+
+                    if OnScreen then
+                        Line.From = Vector2.new(CurrentCamera.ViewportSize.X / 2, CurrentCamera.ViewportSize.Y / 1)
+                        Line.To = Vector2.new(Vector.X, Vector.Y)
+                        Line.Visible = true
+                    else
+                        Line.Visible = false
+                    end
+                else
+                    Line.Visible = false
+                end
+            end)
+        end
+    end
+end
+
+-- Chamar ESP quando novos jogadores entrarem
+game.Players.PlayerAdded:Connect(CreateESP)
+CreateESP() -- Iniciar para quem já está no servidor
+
+Rayfield:Notify({
+   Title = "Sucesso!",
+   Content = "Script carregado. Use com cuidado!",
+   Duration = 5,
+   Image = 4483362458,
+})
